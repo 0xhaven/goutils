@@ -2,6 +2,7 @@ package log
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"log/syslog"
@@ -24,12 +25,26 @@ const (
 )
 
 var levelPrefix = [...]string{
-	LevelDebug:    "[DEBUG] ",
-	LevelInfo:     "[INFO] ",
-	LevelWarning:  "[WARNING] ",
-	LevelError:    "[ERROR] ",
-	LevelCritical: "[CRITICAL] ",
-	LevelFatal:    "[FATAL] ",
+	LevelDebug:    "DEBUG",
+	LevelInfo:     "INFO",
+	LevelWarning:  "WARNING",
+	LevelError:    "ERROR",
+	LevelCritical: "CRITICAL",
+	LevelFatal:    "FATAL",
+}
+
+func newLogger(w io.Writer, prefix string) *log.Logger {
+	return log.New(w, fmt.Sprintf("[%s] ", prefix), 0)
+}
+
+// Loggers maps each logging level to a *log.Logger that will be used for it.
+var Loggers = [...]*log.Logger{
+	LevelDebug:    newLogger(os.Stderr, levelPrefix[LevelDebug]),
+	LevelInfo:     newLogger(os.Stderr, levelPrefix[LevelInfo]),
+	LevelWarning:  newLogger(os.Stderr, levelPrefix[LevelWarning]),
+	LevelError:    newLogger(os.Stderr, levelPrefix[LevelError]),
+	LevelCritical: newLogger(os.Stderr, levelPrefix[LevelCritical]),
+	LevelFatal:    newLogger(os.Stderr, levelPrefix[LevelFatal]),
 }
 
 var levelPriority = [...]syslog.Priority{
@@ -44,10 +59,8 @@ var levelPriority = [...]syslog.Priority{
 var (
 	// Level is the minimum logging level to log at.
 	Level int
-	// Loggers maps each logging level to a *log.Logger that will be used for it.
-	Loggers = map[int]*log.Logger{}
 	// SysLoggers maps each logging level to a *log.Logger that will be used for it.
-	SysLoggers = map[int]*log.Logger{}
+	SysLoggers = make([]*log.Logger, LevelFatal+1)
 	// Syslog determines whether or not to log to syslog
 	Syslog bool
 	// SyslogTag is the tag to use for syslog
@@ -64,27 +77,17 @@ func init() {
 	flag.StringVar(&SyslogTag, "syslog-tag", "", "Syslog tag to use")
 	flag.StringVar(&SyslogNetwork, "syslog-network", "", "Syslog network to use")
 	flag.StringVar(&SyslogRemote, "syslog-remote", "", "Syslog server to use (Defaults to localhost)")
-
-	for l := LevelDebug; l <= LevelFatal; l++ {
-		var w io.Writer
-		if l < LevelWarning {
-			w = os.Stdout
-		} else {
-			w = os.Stderr
-		}
-		Loggers[l] = log.New(w, levelPrefix[l], 0)
-	}
 }
 
 func logger(l int) *log.Logger {
 	if Syslog {
-		if logger, ok := SysLoggers[l]; ok {
-			return logger
+		if SysLoggers[l] != nil {
+			return SysLoggers[l]
 		}
 
 		w, err := syslog.Dial(SyslogNetwork, SyslogRemote, levelPriority[l], SyslogTag)
 		if err == nil {
-			SysLoggers[l] = log.New(w, levelPrefix[l], 0)
+			SysLoggers[l] = newLogger(w, levelPrefix[l])
 			return SysLoggers[l]
 		}
 
