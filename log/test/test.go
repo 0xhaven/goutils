@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 
 	"github.com/jacobhaven/goutils/log"
 )
@@ -15,12 +14,10 @@ func init() {
 
 func main() {
 	flag.Parse()
-
-	fmt.Println(arg)
-	log.Debug("debug")
-	log.Info("info")
-	log.Warning("warning")
-	log.Error("error")
-	log.Critical("crtical")
-	log.Fatal("fatal")
+	log.Debugf("debug: %s", arg)
+	log.Infof("info: %s", arg)
+	log.Warningf("warning: %s", arg)
+	log.Errorf("error: %s", arg)
+	log.Criticalf("critical: %s", arg)
+	log.Fatalf("fatal: %s", arg)
 }

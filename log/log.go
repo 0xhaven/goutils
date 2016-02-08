@@ -2,6 +2,7 @@ package log
 
 import (
 	"flag"
+	"io"
 	"log"
 	"log/syslog"
 	"os"
@@ -45,38 +46,63 @@ var (
 	Level int
 	// Loggers maps each logging level to a *log.Logger that will be used for it.
 	Loggers = map[int]*log.Logger{}
+	// SysLoggers maps each logging level to a *log.Logger that will be used for it.
+	SysLoggers = map[int]*log.Logger{}
+	// Syslog determines whether or not to log to syslog
+	Syslog bool
+	// SyslogTag is the tag to use for syslog
+	SyslogTag string
+	// SyslogNetwork is the remote syslog network.
+	SyslogNetwork string
+	// SyslogRemote is the remote syslog addr.
+	SyslogRemote string
 )
 
 func init() {
-	var useSyslog bool
 	flag.IntVar(&Level, "loglevel", LevelInfo, "Minimum log level")
-	flag.BoolVar(&useSyslog, "syslog", false, "Whether or not to use syslog logging")
-	flag.Parse()
+	flag.BoolVar(&Syslog, "syslog", false, "Whether or not to log to syslog")
+	flag.StringVar(&SyslogTag, "syslog-tag", "", "Syslog tag to use")
+	flag.StringVar(&SyslogNetwork, "syslog-network", "", "Syslog network to use")
+	flag.StringVar(&SyslogRemote, "syslog-remote", "", "Syslog server to use (Defaults to localhost)")
 
 	for l := LevelDebug; l <= LevelFatal; l++ {
-		if !useSyslog {
-			Loggers[l] = log.New(os.Stderr, levelPrefix[l], 0)
+		var w io.Writer
+		if l < LevelWarning {
+			w = os.Stdout
 		} else {
-			var err error
-			Loggers[l], err = syslog.NewLogger(levelPriority[l], 0)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			Loggers[l].SetPrefix(levelPrefix[l])
+			w = os.Stderr
 		}
+		Loggers[l] = log.New(w, levelPrefix[l], 0)
+	}
+}
+
+func logger(l int) *log.Logger {
+	if Syslog {
+		if logger, ok := SysLoggers[l]; ok {
+			return logger
+		}
+
+		w, err := syslog.Dial(SyslogNetwork, SyslogRemote, levelPriority[l], SyslogTag)
+		if err == nil {
+			SysLoggers[l] = log.New(w, levelPrefix[l], 0)
+			return SysLoggers[l]
+		}
+
+		Loggers[LevelError].Println("Unable to dial syslog:", err)
+	}
+
+	return Loggers[l]
+}
+
+func output(l int, v []interface{}) {
+	if l >= Level {
+		logger(l).Print(v...)
 	}
 }
 
 func outputf(l int, format string, v []interface{}) {
 	if l >= Level {
-		Loggers[l].Printf(format, v...)
-	}
-}
-
-func output(l int, v []interface{}) {
-	if l >= Level {
-		Loggers[l].Print(v...)
+		logger(l).Printf(format, v...)
 	}
 }
 
