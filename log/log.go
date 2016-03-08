@@ -1,4 +1,4 @@
-package log
+package log // import "jacob_haven.keybase.pub/goutils/log"
 
 import (
 	"flag"
